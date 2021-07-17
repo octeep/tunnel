@@ -25,7 +25,7 @@ object Serializer {
   def deserializePacket[S, T <: C2SPacket[S]](body: Array[Byte])(implicit stateTag: TypeTag[S]): Try[T] =
     deserialize[T](body).map {
       case x if stateTag.tpe <:< x.stateTag  => x
-      case x => throw new ClassCastException(s"Invalid matching state type: ${x.stateTag} ! <:< $stateTag")
+      case x => throw new ClassCastException(s"Invalid matching state type: !($stateTag <:< ${x.stateTag})")
     }
 
 }
