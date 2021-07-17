@@ -16,7 +16,7 @@ object MClient {
   def apply[S] = new MClient[S](newClient)
 }
 
-class MClient[S] private(val mqttClient: MqttClient) extends AutoCloseable {
+class MClient[+S] private(val mqttClient: MqttClient) extends AutoCloseable {
 
   private val channels = new ConcurrentHashMap[String, AtomicReference[MqttMessage]]().asScala
 

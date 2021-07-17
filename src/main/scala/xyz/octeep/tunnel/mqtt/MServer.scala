@@ -16,7 +16,7 @@ object MServer {
     new MServer[S](state, newClient, identity)
 }
 
-class MServer[S: TypeTag] private(val state: S, val mqttClient: MqttClient, val identity: X25519PrivateKey)(implicit ec: ExecutionContext) extends AutoCloseable {
+class MServer[+S: TypeTag] private(val state: S, val mqttClient: MqttClient, val identity: X25519PrivateKey)(implicit ec: ExecutionContext) extends AutoCloseable {
   val topic: String = toServerTopic(identity.derivePublicKey)
 
   this.mqttClient.setCallback(new MqttCallback {

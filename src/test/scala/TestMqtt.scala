@@ -8,9 +8,9 @@ object TestMqtt {
 
   def main(args: Array[String]): Unit = {
     val serverSecretKey = X25519PrivateKey.randomKey
-    val server = MServer[String]("epic state", serverSecretKey)
+    val server = MServer(new SubState("epic state", 2), serverSecretKey)
     println(server.topic)
-    val client = MClient[String]
+    val client = MClient[SubState]
     server.connect()
     client.connect()
     println("sending")
@@ -18,11 +18,14 @@ object TestMqtt {
     println(response)
   }
 
+  class State(var message: String)
+  class SubState(message: String, var extraData: Int) extends State(message)
+
   case class PongPacket(state: String) extends Serializable
 
-  class PingPacket extends C2SPacket[String] {
+  class PingPacket extends C2SPacket[State] {
     override type Response = PongPacket
-    override def respond(state: String): PingPacket.this.Response = PongPacket(s"response: $state")
+    override def respond(state: State): PingPacket.this.Response = PongPacket(s"response: ${state.message}")
   }
 
 }
