@@ -25,7 +25,7 @@ object TestMqtt {
 
   class PingPacket extends C2SPacket[State] {
     override type Response = PongPacket
-    override def respond(state: State): PingPacket.this.Response = PongPacket(s"response: ${state.message}")
+    override def respond(state: State): Option[PingPacket.this.Response] = Some(PongPacket(s"response: ${state.message}"))
   }
 
 }

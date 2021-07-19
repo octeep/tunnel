@@ -31,10 +31,10 @@ class MServer[+S: TypeTag] private(val state: S, val mqttClient: MqttClient, val
         deserialized <- Serializer.deserializePacket[S, C2SPacket[S]](decryptedResult.plaintext)
         topic = toClientTopic(decryptedResult)
         _ = Future {
-          val response = deserialized.respond(state)
-          encrypt(decryptedResult.key, Serializer.serialize(response)).map { encryptedResponse =>
-            mqttClient.publish(topic, createMessage(encryptedResponse))
-          }
+          for {
+            response <- deserialized.respond(state)
+            encryptedResponse <- encrypt(decryptedResult.key, Serializer.serialize(response)).toOption
+          } yield mqttClient.publish(topic, createMessage(encryptedResponse))
         }
       } yield ()).recover {
         case e: ClassCastException =>
