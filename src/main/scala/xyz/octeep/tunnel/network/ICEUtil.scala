@@ -7,6 +7,7 @@ import org.ice4j.{Transport, TransportAddress}
 import xyz.octeep.ice.SdpUtils
 import xyz.octeep.tunnel.crypto.X25519.X25519PublicKey
 import xyz.octeep.tunnel.mqtt.MClient
+import xyz.octeep.tunnel.network.ICEServerState.EncryptionSpec
 
 import java.util.concurrent.atomic.AtomicReference
 import scala.concurrent.{ExecutionContext, Future}
@@ -14,7 +15,9 @@ import scala.util.{Random, Try}
 
 object ICEUtil {
 
-  def connect(client: MClient[ICEServerState], target: X25519PublicKey, timeout: Long)(implicit ec: ExecutionContext): Try[Option[PseudoTcpSocket]] = Try {
+  case class Connector(pseudoTcpSocket: PseudoTcpSocket, encryptionSpec: Option[EncryptionSpec])
+
+  def connect(client: MClient[ICEServerState], target: X25519PublicKey, timeout: Long)(implicit ec: ExecutionContext): Try[Option[Connector]] = Try {
     val remoteAgent = createAgent()
     val socketRef = new AtomicReference[Option[PseudoTcpSocket]](None)
     val connectionID = randomConnectionID
@@ -32,7 +35,7 @@ object ICEUtil {
         socketRef.synchronized {
           socketRef.wait(remainingTimeout)
           socketRef.get()
-        }
+        }.map(Connector(_, result.encryptionSpec))
       case _ => None
     }
   }

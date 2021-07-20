@@ -3,18 +3,24 @@ package xyz.octeep.tunnel.network
 import org.ice4j.ice.{Agent, IceProcessingState, NominationStrategy}
 import org.ice4j.pseudotcp.{PseudoTcpSocket, PseudoTcpSocketFactory}
 import xyz.octeep.ice.SdpUtils
+import xyz.octeep.tunnel.crypto.randomBytes
+import xyz.octeep.tunnel.network.ICEConnectionStartPacket.ICEResponse
+import xyz.octeep.tunnel.network.ICEServerState.{EncryptionSpec, inputStream, outputStream, randomEncryptionSpec}
 
 import java.beans.PropertyChangeEvent
+import java.io.{InputStream, OutputStream}
 import java.net.{InetSocketAddress, Socket}
 import java.util.concurrent.ConcurrentHashMap
+import javax.crypto.{Cipher, CipherInputStream, CipherOutputStream}
+import javax.crypto.spec.{GCMParameterSpec, IvParameterSpec, SecretKeySpec}
 import scala.concurrent.{ExecutionContext, Future}
 import scala.jdk.CollectionConverters.ConcurrentMapHasAsScala
 
-class ICEServerState(targetAddress: InetSocketAddress)(implicit ec: ExecutionContext) {
+class ICEServerState(targetAddress: InetSocketAddress, val enableEncryption: Boolean)(implicit ec: ExecutionContext) {
 
   private val onlineIncomingConnections = new ConcurrentHashMap[Long, Option[Socket]]().asScala
 
-  private def startSocket(packet: ICEConnectionStartPacket)(agent: Agent) = {
+  private def startSocket(packet: ICEConnectionStartPacket, encryptionSpec: Option[EncryptionSpec])(agent: Agent) = {
     val dataStream = agent.getStream("data")
     val udpComponent = dataStream.getComponents.get(0)
     val task = for {
@@ -27,23 +33,25 @@ class ICEServerState(targetAddress: InetSocketAddress)(implicit ec: ExecutionCon
       socket.setMTU(1500)
       socket.setDebugName("L")
       socket.accept(remoteCandidate.getTransportAddress, 5000)
-      handleIncomingConnection(socket)
+      handleIncomingConnection(encryptionSpec, socket)
     }
     task.getOrElse(Future.unit)
   }
 
-  def acceptConnection(packet: ICEConnectionStartPacket): Option[String] =
+  def acceptConnection(packet: ICEConnectionStartPacket): Option[ICEResponse] =
     Option.unless(this.onlineIncomingConnections.contains(packet.conversationID)) {
       this.onlineIncomingConnections.put(packet.conversationID, None)
       val localAgent = ICEUtil.createAgent()
       localAgent.setNominationStrategy(NominationStrategy.NOMINATE_HIGHEST_PRIO)
       localAgent.setControlling(true)
       SdpUtils.parseSDP(localAgent, packet.sdp)
-      localAgent.addStateChangeListener(new ICEPropertyChangeListener(startSocket(packet)))
+      val encryptionSpec = Option.when(this.enableEncryption)(randomEncryptionSpec())
+      localAgent.addStateChangeListener(new ICEPropertyChangeListener(startSocket(packet, encryptionSpec)))
       localAgent.addStateChangeListener((evt: PropertyChangeEvent) =>
         if (evt.getNewValue == IceProcessingState.FAILED) closeConnection(packet.conversationID))
       localAgent.startConnectivityEstablishment()
-      SdpUtils.createSDPDescription(localAgent)
+      val sdp = SdpUtils.createSDPDescription(localAgent)
+      ICEResponse(sdp, encryptionSpec)
     }
 
   def closeConnection(conversationID: Long): Unit = {
@@ -51,7 +59,7 @@ class ICEServerState(targetAddress: InetSocketAddress)(implicit ec: ExecutionCon
     this.onlineIncomingConnections.remove(conversationID)
   }
 
-  def handleIncomingConnection(pseudoSocket: PseudoTcpSocket): Unit = {
+  def handleIncomingConnection(encryptionSpec: Option[EncryptionSpec], pseudoSocket: PseudoTcpSocket): Unit = {
     val socket = new Socket()
     try {
       socket.setTcpNoDelay(true)
@@ -59,12 +67,39 @@ class ICEServerState(targetAddress: InetSocketAddress)(implicit ec: ExecutionCon
       socket.setSendBufferSize(1024)
       socket.connect(this.targetAddress)
       this.onlineIncomingConnections.put(pseudoSocket.getConversationID, Some(socket))
-      Future(socket.getInputStream.transferTo(pseudoSocket.getOutputStream))
-      pseudoSocket.getInputStream.transferTo(socket.getOutputStream)
+      Future(inputStream(encryptionSpec)(socket.getInputStream).transferTo(pseudoSocket.getOutputStream))
+      pseudoSocket.getInputStream.transferTo(outputStream(encryptionSpec)(socket.getOutputStream))
     } finally {
       closeConnection(pseudoSocket.getConversationID)
       pseudoSocket.close()
     }
   }
+
+}
+
+object ICEServerState {
+
+  case class EncryptionSpec(key: Array[Byte], iv: Array[Byte]) extends Serializable
+
+  def outputStream(option: Option[EncryptionSpec])(outputStream: OutputStream): OutputStream =
+    option.map { spec =>
+      val cipher = Cipher.getInstance("AES/CTR/NoPadding")
+      val keySpec = new SecretKeySpec(spec.key, "AES")
+      val paramSpec = new IvParameterSpec(spec.iv)
+      cipher.init(Cipher.DECRYPT_MODE, keySpec, paramSpec)
+      new CipherOutputStream(outputStream, cipher)
+    }.getOrElse(outputStream)
+
+  def inputStream(option: Option[EncryptionSpec])(inputStream: InputStream): InputStream =
+    option.map { spec =>
+      val cipher = Cipher.getInstance("AES/CTR/NoPadding")
+      val keySpec = new SecretKeySpec(spec.key, "AES")
+      val paramSpec = new IvParameterSpec(spec.iv)
+      cipher.init(Cipher.ENCRYPT_MODE, keySpec, paramSpec)
+      new CipherInputStream(inputStream, cipher)
+    }.getOrElse(inputStream)
+
+  private[network] def randomEncryptionSpec() =
+    EncryptionSpec(randomBytes(16), randomBytes(16))
 
 }

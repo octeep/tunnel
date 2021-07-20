@@ -3,6 +3,7 @@ package xyz.octeep.tunnel
 import org.bitcoinj.core.Base58
 import xyz.octeep.tunnel.crypto.X25519.{X25519PrivateKey, X25519PublicKey}
 import xyz.octeep.tunnel.mqtt.{MClient, MServer}
+import xyz.octeep.tunnel.network.ICEUtil.Connector
 import xyz.octeep.tunnel.network.{ICEConnectionStopPacket, ICEServerState, ICEUtil}
 
 import java.net.{InetAddress, InetSocketAddress, ServerSocket}
@@ -23,7 +24,7 @@ object Start {
                 try {
                   val address = InetAddress.getAllByName(ip)(0)
                   val socketAddress = new InetSocketAddress(address, value)
-                  startServer(X25519PrivateKey(secretKey), socketAddress)
+                  startServer(group.enableEncryption, X25519PrivateKey(secretKey), socketAddress)
                 } catch {
                   case _: Exception =>
                     println("Unable to resolve address.")
@@ -39,11 +40,12 @@ object Start {
         println("Invalid base64 string.")
     }
 
-  private def startServer(secretKey: X25519PrivateKey, address: InetSocketAddress): Unit = {
-    val state = new ICEServerState(address)
+  private def startServer(enableEncryption: Boolean, secretKey: X25519PrivateKey, address: InetSocketAddress): Unit = {
+    val state = new ICEServerState(address, enableEncryption)
     val server = MServer(state, secretKey)
     server.connect()
     println(s"Your server ID is: ${Base58.encodeChecked(secretKey.derivePublicKey.publicKeyBytes)}")
+    println(s"Forwarding traffic to $address")
   }
 
   def startClient(group: Main.MainGroup.ClientArgGroup): Unit =
@@ -72,10 +74,10 @@ object Start {
             println(s"Failed to establish connection to remote server: $exception")
           case Success(None) =>
             println("Remote server didn't respond / responded with invalid data.")
-          case Success(Some(pSocket)) =>
+          case Success(Some(Connector(pSocket, encryptionSpec))) =>
             try {
-              Future(pSocket.getInputStream.transferTo(incoming.getOutputStream))
-              incoming.getInputStream.transferTo(pSocket.getOutputStream)
+              Future(pSocket.getInputStream.transferTo(ICEServerState.outputStream(encryptionSpec)(incoming.getOutputStream)))
+              ICEServerState.inputStream(encryptionSpec)(incoming.getInputStream).transferTo(pSocket.getOutputStream)
             } finally {
               mClient.request(target, new ICEConnectionStopPacket(pSocket.getConversationID))
               pSocket.close()
