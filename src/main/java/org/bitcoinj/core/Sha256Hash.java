@@ -19,7 +19,7 @@ class Sha256Hash {
      * Calculates the SHA-256 hash of the given byte range,
      * and then hashes the resulting hash again.
      *
-     * @param input  the array containing the bytes to hash
+     * @param input the array containing the bytes to hash
      * @param offset the offset within the array of the bytes to hash
      * @param length the number of bytes to hash
      * @return the double-hash (in big-endian order)

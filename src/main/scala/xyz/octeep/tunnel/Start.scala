@@ -49,10 +49,10 @@ object Start {
   def startClient(group: Main.MainGroup.ClientArgGroup): Unit =
     Try(Base58.decodeChecked(group.serverID)).toOption match {
       case Some(serverID) =>
-        if (group.port > 0 && group.port < 65536)
-          startClient(X25519PublicKey(serverID), group.port)
-        else
-          println("Port number should be > 0 and < 65536.")
+          if(group.port > 0 && group.port < 65536)
+            startClient(X25519PublicKey(serverID), group.port)
+          else
+            println("Port number should be > 0 and < 65536.")
       case None => println("Invalid server ID. Check if you have a typo.")
     }
 

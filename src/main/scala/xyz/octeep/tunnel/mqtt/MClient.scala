@@ -38,9 +38,9 @@ class MClient[+S] private(val mqttClient: MqttClient) extends AutoCloseable {
     this.mqttClient.connect(options.build())
   }
 
-  def request(target: X25519PublicKey, request: C2SPacket[S], timeoutMillis: Long = 10000L): Try[Option[request.Response]] =
+  def request[R <: Serializable](target: X25519PublicKey, request: C2SPacket[S, R], timeoutMillis: Long = 10000L): Try[Option[R]] =
     target.encryptTo(Serializer.serialize(request)).map { encryptedResult =>
-      if (request.stateTag != typeTag[Nothing]) {
+      if (request.responseTag != typeTag[Nothing]) {
         val clientTopic = toClientTopic(encryptedResult)
         this.mqttClient.subscribe(clientTopic, 1)
         val monitor = new AtomicReference[MqttMessage](null)
@@ -52,7 +52,7 @@ class MClient[+S] private(val mqttClient: MqttClient) extends AutoCloseable {
         for {
           response <- Option(monitor.get())
           decrypted <- decrypt(encryptedResult.key, response.getPayload).toOption
-          deserialized <- Serializer.deserialize[request.Response](decrypted).toOption
+          deserialized <- Serializer.deserialize[R](decrypted).toOption
         } yield deserialized
       } else {
         send(target, encryptedResult)

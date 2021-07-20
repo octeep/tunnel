@@ -28,7 +28,7 @@ class MServer[+S: TypeTag] private(val state: S, val mqttClient: MqttClient, val
     override def messageArrived(topic: String, message: MqttMessage): Unit =
       (for {
         decryptedResult <- identity.decryptFrom(message.getPayload)
-        deserialized <- Serializer.deserializePacket[S, C2SPacket[S]](decryptedResult.plaintext)
+        deserialized <- Serializer.deserializePacket[S, C2SPacket[S, Serializable]](decryptedResult.plaintext)
         topic = toClientTopic(decryptedResult)
         _ = Future {
           for {

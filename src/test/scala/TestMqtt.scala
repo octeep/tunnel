@@ -23,9 +23,8 @@ object TestMqtt {
 
   case class PongPacket(state: String) extends Serializable
 
-  class PingPacket extends C2SPacket[State] {
-    override type Response = PongPacket
-    override def respond(state: State): Option[PingPacket.this.Response] = Some(PongPacket(s"response: ${state.message}"))
+  class PingPacket extends C2SPacket[State, PongPacket] {
+    override def respond(state: State): Option[PongPacket] = Some(PongPacket(s"response: ${state.message}"))
   }
 
 }
