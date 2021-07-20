@@ -30,7 +30,7 @@ public class Main implements Runnable {
         static class ServerArgGroup {
             @CommandLine.Option(names = {"-l", "--listen"}, description = "Start tunnel in listening mode.", required = true)
             boolean ignored;
-            @CommandLine.Option(names = {"-E", "--encrypt"}, description = "Enable encryption (AES-128-GCM).")
+            @CommandLine.Option(names = {"-E", "--encrypt"}, description = "Enable encryption (AES-128-CTR).")
             boolean enableEncryption;
             @CommandLine.Option(names = {"-k", "--secret-key"}, description = "Base64 encoded 32-byte secret key.", required = true)
             String secretKey;
