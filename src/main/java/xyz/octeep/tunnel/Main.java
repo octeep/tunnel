@@ -7,9 +7,9 @@ public class Main implements Runnable {
 
     @Override
     public void run() {
-        if(mainGroup.clientArgGroup != null) {
+        if (mainGroup.clientArgGroup != null) {
             Start.startClient(mainGroup.clientArgGroup);
-        } else if(mainGroup.serverArgGroup != null) {
+        } else if (mainGroup.serverArgGroup != null) {
             Start.startServer(mainGroup.serverArgGroup);
         }
     }
