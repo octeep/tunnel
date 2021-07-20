@@ -1,7 +1,7 @@
-package xyz.octeep.tunnel.packet.network
+package xyz.octeep.tunnel.network
 
+import xyz.octeep.tunnel.network.ICEPacket.ICEResponse
 import xyz.octeep.tunnel.packet.C2SPacket
-import xyz.octeep.tunnel.packet.network.ICEPacket.ICEResponse
 
 import scala.util.Try
 

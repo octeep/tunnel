@@ -1,4 +1,4 @@
-package xyz.octeep.tunnel.packet.network
+package xyz.octeep.tunnel.network
 
 import org.ice4j.ice.{Agent, IceProcessingState, NominationStrategy}
 import org.ice4j.pseudotcp.{PseudoTcpSocket, PseudoTcpSocketFactory}

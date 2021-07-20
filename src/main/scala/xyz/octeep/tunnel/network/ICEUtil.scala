@@ -1,6 +1,6 @@
-package xyz.octeep.tunnel.packet.network
+package xyz.octeep.tunnel.network
 
-import org.ice4j.ice.harvest.StunCandidateHarvester
+import org.ice4j.ice.harvest.{StunCandidateHarvester, UPNPHarvester}
 import org.ice4j.ice.{Agent, IceMediaStream}
 import org.ice4j.pseudotcp.{PseudoTcpSocket, PseudoTcpSocketFactory}
 import org.ice4j.{Transport, TransportAddress}
@@ -76,6 +76,7 @@ object ICEUtil {
     val agent = new Agent()
     agent.addCandidateHarvester(new StunCandidateHarvester(new TransportAddress("stun.nextcloud.com", 443, Transport.UDP)))
     agent.addCandidateHarvester(new StunCandidateHarvester(new TransportAddress("stun.nottingham.ac.uk", 3478, Transport.UDP)))
+    agent.addCandidateHarvester(new UPNPHarvester)
     createStream(pTcpPort, "data", agent)
     agent
   }

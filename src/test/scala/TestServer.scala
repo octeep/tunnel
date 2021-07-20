@@ -1,11 +1,9 @@
-import xyz.octeep.tunnel.crypto.X25519
 import xyz.octeep.tunnel.crypto.X25519.X25519PrivateKey
 import xyz.octeep.tunnel.mqtt.{MClient, MServer}
-import xyz.octeep.tunnel.packet.network.{ICEServerState, ICEUtil}
+import xyz.octeep.tunnel.network.{ICEServerState, ICEUtil}
 
 import java.net.InetSocketAddress
 import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.Future
 
 object TestServer {
 
