@@ -3,7 +3,7 @@ package xyz.octeep.tunnel
 import org.bitcoinj.core.Base58
 import xyz.octeep.tunnel.crypto.X25519.{X25519PrivateKey, X25519PublicKey}
 import xyz.octeep.tunnel.mqtt.{MClient, MServer}
-import xyz.octeep.tunnel.network.{ICEServerState, ICEUtil}
+import xyz.octeep.tunnel.network.{ICEConnectionStopPacket, ICEServerState, ICEUtil}
 
 import java.net.{InetAddress, InetSocketAddress, ServerSocket}
 import java.util.Base64
@@ -73,8 +73,13 @@ object Start {
           case Success(None) =>
             println("Remote server didn't respond / responded with invalid data.")
           case Success(Some(pSocket)) =>
-            Future(pSocket.getInputStream.transferTo(incoming.getOutputStream))
-            incoming.getInputStream.transferTo(pSocket.getOutputStream)
+            try {
+              Future(pSocket.getInputStream.transferTo(incoming.getOutputStream))
+              incoming.getInputStream.transferTo(pSocket.getOutputStream)
+            } finally {
+              mClient.sendNoResponse(target, new ICEConnectionStopPacket(pSocket.getConversationID))
+              pSocket.close()
+            }
         }
       }
     }

@@ -1,5 +1,6 @@
 package xyz.octeep.tunnel.mqtt
 
+import jdk.nashorn.internal.ir.RuntimeNode.Request
 import org.eclipse.paho.mqttv5.client.{IMqttToken, MqttCallback, MqttClient, MqttDisconnectResponse}
 import org.eclipse.paho.mqttv5.common.packet.MqttProperties
 import org.eclipse.paho.mqttv5.common.{MqttException, MqttMessage}
@@ -53,6 +54,13 @@ class MClient[+S] private(val mqttClient: MqttClient) extends AutoCloseable {
         decrypted <- decrypt(encryptedResult.key, response.getPayload).toOption
         deserialized <- Serializer.deserialize[request.Response](decrypted).toOption
       } yield deserialized
+    }
+
+  def sendNoResponse(target: X25519PublicKey, request: C2SPacket[S]): Try[Unit] =
+    target.encryptTo(Serializer.serialize(request)).map { encryptedResult =>
+      val mqttMessage = createMessage(encryptedResult.ciphertext)
+      val topic = toServerTopic(target)
+      this.mqttClient.publish(topic, mqttMessage)
     }
 
   override def close(): Unit = {

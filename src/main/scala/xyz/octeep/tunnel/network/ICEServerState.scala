@@ -8,12 +8,13 @@ import java.beans.PropertyChangeEvent
 import java.net.{InetSocketAddress, Socket}
 import java.util.concurrent.ConcurrentHashMap
 import scala.concurrent.{ExecutionContext, Future}
+import scala.jdk.CollectionConverters.ConcurrentMapHasAsScala
 
 class ICEServerState(targetAddress: InetSocketAddress)(implicit ec: ExecutionContext) {
 
-  private val onlineIncomingConnections = ConcurrentHashMap.newKeySet[Long]()
+  private val onlineIncomingConnections = new ConcurrentHashMap[Long, Option[Socket]]().asScala
 
-  private def startSocket(packet: ICEPacket)(agent: Agent) = {
+  private def startSocket(packet: ICEConnectionStartPacket)(agent: Agent) = {
     val dataStream = agent.getStream("data")
     val udpComponent = dataStream.getComponents.get(0)
     val task = for {
@@ -31,18 +32,24 @@ class ICEServerState(targetAddress: InetSocketAddress)(implicit ec: ExecutionCon
     task.getOrElse(Future.unit)
   }
 
-  def acceptConnection(packet: ICEPacket): Option[String] =
-    Option.when(this.onlineIncomingConnections.add(packet.conversationID)) {
+  def acceptConnection(packet: ICEConnectionStartPacket): Option[String] =
+    Option.unless(this.onlineIncomingConnections.contains(packet.conversationID)) {
+      this.onlineIncomingConnections.put(packet.conversationID, None)
       val localAgent = ICEUtil.createAgent()
       localAgent.setNominationStrategy(NominationStrategy.NOMINATE_HIGHEST_PRIO)
       localAgent.setControlling(true)
       SdpUtils.parseSDP(localAgent, packet.sdp)
       localAgent.addStateChangeListener(new ICEPropertyChangeListener(startSocket(packet)))
       localAgent.addStateChangeListener((evt: PropertyChangeEvent) =>
-        if (evt.getNewValue == IceProcessingState.FAILED) this.onlineIncomingConnections.remove(packet.conversationID))
+        if (evt.getNewValue == IceProcessingState.FAILED) closeConnection(packet.conversationID))
       localAgent.startConnectivityEstablishment()
       SdpUtils.createSDPDescription(localAgent)
     }
+
+  def closeConnection(conversationID: Long): Unit = {
+    this.onlineIncomingConnections.get(conversationID).flatten.foreach(_.close())
+    this.onlineIncomingConnections.remove(conversationID)
+  }
 
   def handleIncomingConnection(pseudoSocket: PseudoTcpSocket): Unit = {
     val socket = new Socket()
@@ -51,11 +58,12 @@ class ICEServerState(targetAddress: InetSocketAddress)(implicit ec: ExecutionCon
       socket.setReceiveBufferSize(65536)
       socket.setSendBufferSize(1024)
       socket.connect(this.targetAddress)
+      this.onlineIncomingConnections.put(pseudoSocket.getConversationID, Some(socket))
       Future(socket.getInputStream.transferTo(pseudoSocket.getOutputStream))
       pseudoSocket.getInputStream.transferTo(socket.getOutputStream)
     } finally {
-      this.onlineIncomingConnections.remove(pseudoSocket.getConversationID)
-      socket.close()
+      closeConnection(pseudoSocket.getConversationID)
+      pseudoSocket.close()
     }
   }
 

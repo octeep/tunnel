@@ -22,7 +22,7 @@ object ICEUtil {
     remoteAgent.setControlling(false)
     val remoteSDP = SdpUtils.createSDPDescription(remoteAgent)
     val now = System.currentTimeMillis()
-    val response = client.request(target, new ICEPacket(connectionID, remoteSDP), timeout).get
+    val response = client.request(target, new ICEConnectionStartPacket(connectionID, remoteSDP), timeout).get
     val elapsedTime = System.currentTimeMillis() - now
     val remainingTimeout = timeout - elapsedTime
     response match {
