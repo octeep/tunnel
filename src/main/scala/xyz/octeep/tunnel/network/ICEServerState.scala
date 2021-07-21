@@ -12,13 +12,16 @@ import java.io.{InputStream, OutputStream}
 import java.net.{InetSocketAddress, Socket}
 import java.util.concurrent.ConcurrentHashMap
 import javax.crypto.{Cipher, CipherInputStream, CipherOutputStream}
-import javax.crypto.spec.{GCMParameterSpec, IvParameterSpec, SecretKeySpec}
+import javax.crypto.spec.{IvParameterSpec, SecretKeySpec}
 import scala.concurrent.{ExecutionContext, Future}
 import scala.jdk.CollectionConverters.ConcurrentMapHasAsScala
 
-class ICEServerState(targetAddress: InetSocketAddress, val enableEncryption: Boolean)(implicit ec: ExecutionContext) {
+abstract class ICEServerState(val enableEncryption: Boolean)(implicit ec: ExecutionContext) {
 
   private val onlineIncomingConnections = new ConcurrentHashMap[Long, Option[Socket]]().asScala
+
+  def targetAddress(): InetSocketAddress
+  def createAgent(): Agent = ICEUtil.createAgent()
 
   private def startSocket(packet: ICEConnectionStartPacket, encryptionSpec: Option[EncryptionSpec])(agent: Agent) = {
     val dataStream = agent.getStream("data")
@@ -33,7 +36,7 @@ class ICEServerState(targetAddress: InetSocketAddress, val enableEncryption: Boo
       socket.setMTU(1500)
       socket.setDebugName("L")
       socket.accept(remoteCandidate.getTransportAddress, 5000)
-      handleIncomingConnection(encryptionSpec, socket)
+      handleIncomingConnection(packet, encryptionSpec, socket)
     }
     task.getOrElse(Future.unit)
   }
@@ -41,7 +44,7 @@ class ICEServerState(targetAddress: InetSocketAddress, val enableEncryption: Boo
   def acceptConnection(packet: ICEConnectionStartPacket): Option[ICEResponse] =
     Option.unless(this.onlineIncomingConnections.contains(packet.conversationID)) {
       this.onlineIncomingConnections.put(packet.conversationID, None)
-      val localAgent = ICEUtil.createAgent()
+      val localAgent = createAgent()
       localAgent.setNominationStrategy(NominationStrategy.NOMINATE_HIGHEST_PRIO)
       localAgent.setControlling(true)
       SdpUtils.parseSDP(localAgent, packet.sdp)
@@ -59,13 +62,18 @@ class ICEServerState(targetAddress: InetSocketAddress, val enableEncryption: Boo
     this.onlineIncomingConnections.remove(conversationID)
   }
 
-  def handleIncomingConnection(encryptionSpec: Option[EncryptionSpec], pseudoSocket: PseudoTcpSocket): Unit = {
+  def createSocket(packet: ICEConnectionStartPacket): Socket = {
     val socket = new Socket()
+    socket.setTcpNoDelay(true)
+    socket.setReceiveBufferSize(65536)
+    socket.setSendBufferSize(1024)
+    socket.connect(this.targetAddress())
+    socket
+  }
+
+  def handleIncomingConnection(packet: ICEConnectionStartPacket, encryptionSpec: Option[EncryptionSpec], pseudoSocket: PseudoTcpSocket): Unit = {
     try {
-      socket.setTcpNoDelay(true)
-      socket.setReceiveBufferSize(65536)
-      socket.setSendBufferSize(1024)
-      socket.connect(this.targetAddress)
+      val socket = createSocket(packet)
       this.onlineIncomingConnections.put(pseudoSocket.getConversationID, Some(socket))
       Future(inputStream(encryptionSpec)(socket.getInputStream).transferTo(pseudoSocket.getOutputStream))
       pseudoSocket.getInputStream.transferTo(outputStream(encryptionSpec)(socket.getOutputStream))

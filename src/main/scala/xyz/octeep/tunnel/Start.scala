@@ -41,7 +41,9 @@ object Start {
     }
 
   private def startServer(enableEncryption: Boolean, secretKey: X25519PrivateKey, address: InetSocketAddress): Unit = {
-    val state = new ICEServerState(address, enableEncryption)
+    val state = new ICEServerState(enableEncryption) {
+      override def targetAddress(): InetSocketAddress = address
+    }
     val server = MServer(state, secretKey)
     server.connect()
     println(s"Your server ID is: ${Base58.encodeChecked(secretKey.derivePublicKey.publicKeyBytes)}")

@@ -77,6 +77,7 @@ object ICEUtil {
 
   def createAgent(pTcpPort: Int = ICEUtil.randomPort()): Agent = {
     val agent = new Agent()
+
     agent.addCandidateHarvester(new StunCandidateHarvester(new TransportAddress("stun.nextcloud.com", 443, Transport.UDP)))
     agent.addCandidateHarvester(new StunCandidateHarvester(new TransportAddress("stun.nottingham.ac.uk", 3478, Transport.UDP)))
     agent.addCandidateHarvester(new UPNPHarvester)
